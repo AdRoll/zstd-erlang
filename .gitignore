@@ -1,3 +1,4 @@
+doc/
 .rebar3
 _*
 .eunit
@@ -13,5 +14,6 @@ erl_crash.dump
 .rebar
 logs
 _build
+rebar3.crashdump
 priv/libzstd/libzstd.a
 priv/zstd_nif.so
