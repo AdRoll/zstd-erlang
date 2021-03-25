@@ -1,7 +1,7 @@
 zstd-erlang
 =====
 
-[![Build Status](https://travis-ci.org/mururu/zstd-erlang.svg?branch=master)](https://travis-ci.org/mururu/zstd-erlang)
+[![Build Status](https://travis-ci.org/AdRoll/zstd-erlang.svg?branch=main)](https://travis-ci.org/AdRoll/zstd-erlang)
 [![Hex.pm](https://img.shields.io/hexpm/v/zstd.svg)](https://hex.pm/packages/zstd)
 
 Zstd binding for Erlang/Elixir
