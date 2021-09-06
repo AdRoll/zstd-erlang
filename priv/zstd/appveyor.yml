@@ -1,15 +1,20 @@
+# Following tests are run _only_ on `release` branch
+# and on selected feature branch named `appveyorTest` or `visual*`
+
 -
   version: 1.0.{build}
   branches:
     only:
-    - dev
+    - release
     - master
+    - /appveyor*/
+    - /visual*/
   environment:
     matrix:
     - COMPILER: "gcc"
       HOST:     "mingw"
       PLATFORM: "x64"
-      SCRIPT:   "make allzstd MOREFLAGS=-static && make -C tests test-symbols fullbench-dll fullbench-lib"
+      SCRIPT:   "make allzstd MOREFLAGS=-static"
       ARTIFACT: "true"
       BUILD:    "true"
     - COMPILER: "gcc"
@@ -21,7 +26,7 @@
     - COMPILER: "clang"
       HOST:     "mingw"
       PLATFORM: "x64"
-      SCRIPT:   "MOREFLAGS='--target=x86_64-w64-mingw32 -Werror -Wconversion -Wno-sign-conversion' make allzstd"
+      SCRIPT:   "MOREFLAGS='--target=x86_64-w64-mingw32 -Werror -Wconversion -Wno-sign-conversion' make -j allzstd V=1"
       BUILD:    "true"
 
     - COMPILER: "gcc"
@@ -46,6 +51,15 @@
       HOST:     "visual"
       PLATFORM: "Win32"
       CONFIGURATION: "Release"
+
+    - COMPILER: "clang-cl"
+      HOST:     "cmake-visual"
+      PLATFORM: "x64"
+      CONFIGURATION: "Release"
+      CMAKE_GENERATOR: "Visual Studio 15 2017"
+      CMAKE_GENERATOR_PLATFORM: "x64"
+      CMAKE_GENERATOR_TOOLSET: "LLVM"
+      APPVEYOR_BUILD_WORKER_IMAGE: "Visual Studio 2017"
 
   install:
   - ECHO Installing %COMPILER% %PLATFORM% %CONFIGURATION%
@@ -80,12 +94,22 @@
       SET "LDFLAGS=../../zlib/libz.a" &&
       sh -c "%SCRIPT%" &&
       ( if [%COMPILER%]==[gcc] if [%ARTIFACT%]==[true]
+          ECHO Creating artifacts &&
+          ECHO %cd% &&
           lib\dll\example\build_package.bat &&
           make -C programs DEBUGFLAGS= clean zstd &&
           cd programs\ && 7z a -tzip -mx9 zstd-win-binary-%PLATFORM%.zip zstd.exe &&
           appveyor PushArtifact zstd-win-binary-%PLATFORM%.zip &&
           cp zstd.exe ..\bin\zstd.exe &&
-          cd ..\bin\ && 7z a -tzip -mx9 zstd-win-release-%PLATFORM%.zip * &&
+          git clone --depth 1 --branch release https://github.com/facebook/zstd &&
+          cd zstd &&
+          git archive --format=tar release -o zstd-src.tar &&
+          ..\zstd -19 zstd-src.tar &&
+          appveyor PushArtifact zstd-src.tar.zst &&
+          certUtil -hashfile zstd-src.tar.zst SHA256 > zstd-src.tar.zst.sha256.sig &&
+          appveyor PushArtifact zstd-src.tar.zst.sha256.sig &&
+          cd ..\..\bin\ &&
+          7z a -tzip -mx9 zstd-win-release-%PLATFORM%.zip * &&
           appveyor PushArtifact zstd-win-release-%PLATFORM%.zip
       )
     )
@@ -139,6 +163,15 @@
       COPY build\VS2010\bin\%PLATFORM%_%CONFIGURATION%\fuzzer.exe tests\fuzzer_VS2015_%PLATFORM%_%CONFIGURATION%.exe &&
       COPY build\VS2010\bin\%PLATFORM%_%CONFIGURATION%\*.exe tests\
     )
+  - if [%HOST%]==[cmake-visual] (
+      ECHO *** &&
+      ECHO *** Building %CMAKE_GENERATOR% ^(%CMAKE_GENERATOR_TOOLSET%^) %PLATFORM%\%CONFIGURATION% &&
+      PUSHD build\cmake &&
+      cmake -DBUILD_TESTING=ON . &&
+      cmake --build . --config %CONFIGURATION% -j4 &&
+      POPD &&
+      ECHO ***
+    )
 
   test_script:
   - ECHO Testing %COMPILER% %PLATFORM% %CONFIGURATION%
@@ -147,6 +180,8 @@
   - if [%TEST%]==[cmake] (
       mkdir build\cmake\build &&
       cd build\cmake\build &&
+      SET FUZZERTEST=-T2mn &&
+      SET ZSTREAM_TESTTIME=-T2mn &&
       cmake -G "Visual Studio 14 2015 Win64" .. &&
       cd ..\..\.. &&
       make clean
@@ -154,33 +189,40 @@
   - SET "FUZZERTEST=-T30s"
   - if [%HOST%]==[visual] if [%CONFIGURATION%]==[Release] (
       CD tests &&
-      SET ZSTD=./zstd.exe &&
+      SET ZSTD_BIN=./zstd.exe&&
+      SET DATAGEN_BIN=./datagen.exe&&
       sh -e playTests.sh --test-large-data &&
       fullbench.exe -i1 &&
       fullbench.exe -i1 -P0 &&
-      fuzzer_VS2008_%PLATFORM%_Release.exe %FUZZERTEST% &&
-      fuzzer_VS2010_%PLATFORM%_Release.exe %FUZZERTEST% &&
       fuzzer_VS2012_%PLATFORM%_Release.exe %FUZZERTEST% &&
       fuzzer_VS2013_%PLATFORM%_Release.exe %FUZZERTEST% &&
       fuzzer_VS2015_%PLATFORM%_Release.exe %FUZZERTEST%
     )
+
+
+# The following tests are for regular pushes
+# into `dev` or some feature branch
+# There run less tests, for shorter feedback loop
 
 -
   version: 1.0.{build}
   environment:
     matrix:
     - COMPILER: "gcc"
+      HOST:     "cygwin"
+      PLATFORM: "x64"
+    - COMPILER: "gcc"
       HOST:     "mingw"
       PLATFORM: "x64"
-      SCRIPT:   "make allzstd"
+      SCRIPT:   "CFLAGS=-Werror make -j allzstd DEBUGLEVEL=2"
     - COMPILER: "gcc"
       HOST:     "mingw"
       PLATFORM: "x86"
-      SCRIPT:   "make allzstd"
+      SCRIPT:   "CFLAGS=-Werror make -j allzstd"
     - COMPILER: "clang"
       HOST:     "mingw"
       PLATFORM: "x64"
-      SCRIPT:   "MOREFLAGS='--target=x86_64-w64-mingw32 -Werror -Wconversion -Wno-sign-conversion' make allzstd"
+      SCRIPT:   "CFLAGS='--target=x86_64-w64-mingw32 -Werror -Wconversion -Wno-sign-conversion' make -j allzstd V=1"
 
     - COMPILER: "visual"
       HOST:     "visual"
@@ -198,10 +240,26 @@
       HOST:     "visual"
       PLATFORM: "Win32"
       CONFIGURATION: "Release"
+
+    - COMPILER: "clang-cl"
+      HOST:     "cmake-visual"
+      PLATFORM: "x64"
+      CONFIGURATION: "Release"
+      CMAKE_GENERATOR: "Visual Studio 15 2017"
+      CMAKE_GENERATOR_PLATFORM: "x64"
+      CMAKE_GENERATOR_TOOLSET: "LLVM"
+      APPVEYOR_BUILD_WORKER_IMAGE: "Visual Studio 2017"
 
   install:
   - ECHO Installing %COMPILER% %PLATFORM% %CONFIGURATION%
   - SET PATH_ORIGINAL=%PATH%
+  - if [%HOST%]==[cygwin] (
+      ECHO Installing Cygwin Packages &&
+      C:\cygwin64\setup-x86_64.exe -qnNdO -R "C:\cygwin64" -g -P ^
+        gcc,^
+        cmake,^
+        make
+    )
   - if [%HOST%]==[mingw] (
       SET "PATH_MINGW32=C:\mingw-w64\i686-6.3.0-posix-dwarf-rt_v5-rev1\mingw32\bin" &&
       SET "PATH_MINGW64=C:\mingw-w64\x86_64-6.3.0-posix-seh-rt_v5-rev1\mingw64\bin" &&
@@ -214,6 +272,17 @@
 
   build_script:
   - ECHO Building %COMPILER% %PLATFORM% %CONFIGURATION%
+  - if [%HOST%]==[cygwin] (
+      set CHERE_INVOKING=yes &&
+      set CC=%COMPILER% &&
+      C:\cygwin64\bin\bash --login -c "
+        set -e;
+        cd build/cmake;
+        CFLAGS='-Werror' cmake -G 'Unix Makefiles' -DCMAKE_BUILD_TYPE=Debug -DZSTD_BUILD_TESTS:BOOL=ON -DZSTD_FUZZER_FLAGS=-T20s -DZSTD_ZSTREAM_FLAGS=-T20s -DZSTD_FULLBENCH_FLAGS=-i0 .;
+        make VERBOSE=1 -j;
+        ctest -V -L Medium;
+      "
+    )
   - if [%HOST%]==[mingw] (
       ( if [%PLATFORM%]==[x64] (
         SET "PATH=%PATH_MINGW64%;%PATH_ORIGINAL%"
@@ -237,4 +306,22 @@
       MD5sum build/VS2010/bin/%PLATFORM%_%CONFIGURATION%/*.exe &&
       COPY build\VS2010\bin\%PLATFORM%_%CONFIGURATION%\fuzzer.exe tests\fuzzer_VS2015_%PLATFORM%_%CONFIGURATION%.exe &&
       COPY build\VS2010\bin\%PLATFORM%_%CONFIGURATION%\*.exe tests\
+    )
+  - if [%HOST%]==[cmake-visual] (
+      ECHO *** &&
+      ECHO *** Building %CMAKE_GENERATOR% ^(%CMAKE_GENERATOR_TOOLSET%^) %PLATFORM%\%CONFIGURATION% &&
+      PUSHD build\cmake &&
+      cmake -DBUILD_TESTING=ON . &&
+      cmake --build . --config %CONFIGURATION% -j4 &&
+      POPD &&
+      ECHO ***
+    )
+
+
+  test_script:
+  - ECHO Testing %COMPILER% %PLATFORM% %CONFIGURATION%
+  - if [%HOST%]==[mingw] (
+      set "CC=%COMPILER%" &&
+      make clean &&
+      make check
     )
