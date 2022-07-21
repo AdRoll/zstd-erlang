@@ -2,6 +2,7 @@
 
 -export([compress/1, compress/2]).
 -export([decompress/1]).
+-export([compress_to_file/2, compress_to_file/3]).
 
 -on_load init/0.
 
@@ -19,6 +20,17 @@ compress(_, _) ->
 
 -spec decompress(Compressed :: binary()) -> Uncompressed :: binary() | error.
 decompress(_) ->
+    erlang:nif_error(?LINE).
+
+-spec compress_to_file(Uncompressed :: binary(), Path :: binary()) -> ok | error.
+compress_to_file(Binary, Path) ->
+    compress_to_file(Binary, Path, 1).
+
+-spec compress_to_file(Uncompressed :: binary(),
+                       Path :: binary(),
+                       CompressionLevel :: 0..22) ->
+                          ok | error.
+compress_to_file(_, _, _) ->
     erlang:nif_error(?LINE).
 
 init() ->
