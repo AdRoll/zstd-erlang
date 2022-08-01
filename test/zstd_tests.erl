@@ -10,7 +10,17 @@ zstd_test() ->
 
 compress_to_file_test() ->
     Path = "/tmp/zstd_test.zst",
-    Data = <<"Hello, World!">>,
+    Data = <<"Hello there!">>,
+    compress_to_file_and_check(Path, Data).
+
+compress_to_file_using_dirty_scheduler_test() ->
+    Path = "/tmp/zstd_dirty_scheduler_test.zst",
+    Data =
+        base64:encode(
+            crypto:strong_rand_bytes(64000)),
+    compress_to_file_and_check(Path, Data).
+
+compress_to_file_and_check(Path, Data) ->
     case filelib:is_regular(Path) of
         true ->
             file:delete(Path);

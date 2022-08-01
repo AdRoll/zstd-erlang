@@ -4,9 +4,14 @@
 #include <errno.h>
 #include <zstd.h>
 
+#define MAX_BYTES_TO_NIF 20000
+
 ErlNifTSDKey zstdDecompressContextKey;
 ErlNifTSDKey zstdCompressContextKey;
 ErlNifTSDKey zstdCompressToFileContextKey;
+
+static ERL_NIF_TERM do_compress_to_file(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+
 
 static ERL_NIF_TERM zstd_nif_compress(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   ErlNifBinary bin, ret_bin;
@@ -100,8 +105,17 @@ static void saveFile_orDie(const char* fileName, const void* buff, size_t buffSi
         exit(3);
     }
 }
-
 static ERL_NIF_TERM zstd_nif_compress_to_file(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+    ErlNifBinary bin;
+    if(!enif_inspect_binary(env, argv[0], &bin)) return enif_make_badarg(env);
+    if (bin.size > MAX_BYTES_TO_NIF) {
+        return enif_schedule_nif(env, "do_compress_to_file", ERL_NIF_DIRTY_JOB_CPU_BOUND, do_compress_to_file, argc, argv);
+    }
+
+    return do_compress_to_file(env, argc, argv);
+}
+
+static ERL_NIF_TERM do_compress_to_file(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   ErlNifBinary bin, ret_bin, arg_path;
   size_t buff_size, compressed_size;
   unsigned int compression_level;
