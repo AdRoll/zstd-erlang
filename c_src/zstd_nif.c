@@ -80,7 +80,6 @@ static FILE* fopen_orDie(const char *filename, const char *instruction)
     FILE* const inFile = fopen(filename, instruction);
     if (inFile) return inFile;
     /* error */
-    perror(filename);
     exit(2);
 }
 
@@ -97,13 +96,12 @@ static void saveFile_orDie(const char* fileName, const void* buff, size_t buffSi
     FILE* const oFile = fopen_orDie(fileName, "a");
     size_t const wSize = fwrite(buff, 1, buffSize, oFile);
     if (wSize != (size_t)buffSize) {
-        fprintf(stderr, "fwrite: %s : %s \n", fileName, strerror(errno));
         exit(5);
     }
     if (fclose(oFile)) {
-        perror(fileName);
         exit(3);
     }
+    fdatasync();
 }
 static ERL_NIF_TERM zstd_nif_compress_to_file(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     ErlNifBinary bin;

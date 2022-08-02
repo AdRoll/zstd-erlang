@@ -3,7 +3,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 zstd_test() ->
-    Data = <<"Hello, World!">>,
+    Data = <<"Hello, World!\n">>,
     ?assertEqual(Data,
                  zstd:decompress(
                      zstd:compress(Data))).
