@@ -101,7 +101,6 @@ static void saveFile_orDie(const char* fileName, const void* buff, size_t buffSi
     if (fclose(oFile)) {
         exit(3);
     }
-    fdatasync();
 }
 static ERL_NIF_TERM zstd_nif_compress_to_file(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     ErlNifBinary bin;
