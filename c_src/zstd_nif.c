@@ -113,10 +113,9 @@ static ERL_NIF_TERM zstd_nif_compress_to_file(ErlNifEnv* env, int argc, const ER
 }
 
 static ERL_NIF_TERM do_compress_to_file(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  ErlNifBinary bin, ret_bin, arg_path;
+  ErlNifBinary bin, ret_bin;
   size_t buff_size, compressed_size;
-  unsigned int compression_level;
-  char* path;
+  unsigned int compression_level, path_len;
 
   ZSTD_CCtx* ctx = (ZSTD_CCtx*)enif_tsd_get(zstdCompressToFileContextKey);
   if (!ctx) {
@@ -124,8 +123,11 @@ static ERL_NIF_TERM do_compress_to_file(ErlNifEnv* env, int argc, const ERL_NIF_
       enif_tsd_set(zstdCompressToFileContextKey, ctx);
   }
 
+  enif_get_list_length(env, argv[1], &path_len);
+  char path[path_len + 1];
+
   if(!enif_inspect_binary(env, argv[0], &bin)
-     || !enif_inspect_binary(env, argv[1], &arg_path)
+     || !enif_get_string(env, argv[1], path, (path_len + 1), ERL_NIF_LATIN1)
      || !enif_get_uint(env, argv[2], &compression_level)
      || compression_level > ZSTD_maxCLevel())
     return enif_make_badarg(env);
@@ -142,8 +144,6 @@ static ERL_NIF_TERM do_compress_to_file(ErlNifEnv* env, int argc, const ERL_NIF_
   if(!enif_realloc_binary(&ret_bin, compressed_size))
     return enif_make_atom(env, "error");
 
-  path = (char *)arg_path.data;
-  
   saveFile_orDie(path, ret_bin.data, compressed_size);
   
   return enif_make_atom(env, "ok");

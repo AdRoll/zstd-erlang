@@ -22,12 +22,12 @@ compress(_, _) ->
 decompress(_) ->
     erlang:nif_error(?LINE).
 
--spec compress_to_file(Uncompressed :: binary(), Path :: binary()) -> ok | error.
+-spec compress_to_file(Uncompressed :: binary(), Path :: string()) -> ok | error.
 compress_to_file(Binary, Path) ->
     compress_to_file(Binary, Path, 1).
 
 -spec compress_to_file(Uncompressed :: binary(),
-                       Path :: binary(),
+                       Path :: string(),
                        CompressionLevel :: 0..22) ->
                           ok | error.
 compress_to_file(_, _, _) ->

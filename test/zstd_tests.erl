@@ -27,7 +27,7 @@ compress_to_file_and_check(Path, Data) ->
         _ ->
             ok
     end,
-    ?assertEqual(ok, zstd:compress_to_file(Data, erlang:list_to_binary(Path))),
+    ?assertEqual(ok, zstd:compress_to_file(Data, Path)),
     {ok, ToDecompress} = file:read_file(Path),
     Decompressed = zstd:decompress(ToDecompress),
     ?assertEqual(Decompressed, Data).
