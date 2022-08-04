@@ -69,38 +69,22 @@ static ERL_NIF_TERM zstd_nif_decompress(ErlNifEnv* env, int argc, const ERL_NIF_
   return out;
 }
 
-/*! fopen_orDie() :
- * Open a file using given file path and open option.
- *
- * @return If successful this function will return a FILE pointer to an
- * opened file otherwise it sends an error to stderr and exits.
- */
-static FILE* fopen_orDie(const char *filename, const char *instruction)
-{
-    FILE* const inFile = fopen(filename, instruction);
-    if (inFile) return inFile;
-    /* error */
-    exit(2);
-}
 
-/*! saveFile_orDie() :
- *
- * Save buffSize bytes to a given file path, obtaining them from a location pointed
- * to by buff.
- *
- * Note: This function will send an error to stderr and exit if it
- * cannot write to a given file.
- */
-static void saveFile_orDie(const char* fileName, const void* buff, size_t buffSize)
+
+static int save_file(const char* fileName, const void* buff, size_t buffSize)
 {
-    FILE* const oFile = fopen_orDie(fileName, "a");
+    FILE* const oFile = fopen(fileName, "a");
+    if (!oFile) {
+      return 0;
+    }
     size_t const wSize = fwrite(buff, 1, buffSize, oFile);
     if (wSize != (size_t)buffSize) {
-        exit(5);
+        return 0;
     }
     if (fclose(oFile)) {
-        exit(3);
+        return 0;
     }
+    return 1;
 }
 static ERL_NIF_TERM zstd_nif_compress_to_file(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     ErlNifBinary bin;
@@ -138,14 +122,22 @@ static ERL_NIF_TERM do_compress_to_file(ErlNifEnv* env, int argc, const ERL_NIF_
     return enif_make_atom(env, "error");
 
   compressed_size = ZSTD_compressCCtx(ctx, ret_bin.data, buff_size, bin.data, bin.size, compression_level);
-  if(ZSTD_isError(compressed_size))
+  if(ZSTD_isError(compressed_size)) {
+    enif_release_binary(&ret_bin);
     return enif_make_atom(env, "error");
+  }
 
-  if(!enif_realloc_binary(&ret_bin, compressed_size))
+  if(!enif_realloc_binary(&ret_bin, compressed_size)) {
+    enif_release_binary(&ret_bin);
     return enif_make_atom(env, "error");
+  }
 
-  saveFile_orDie(path, ret_bin.data, compressed_size);
+  if (!save_file(path, ret_bin.data, compressed_size)) {
+    enif_release_binary(&ret_bin);
+    return enif_make_atom(env, "error");
+  }
   
+  enif_release_binary(&ret_bin);
   return enif_make_atom(env, "ok");
 }
 
