@@ -88,7 +88,7 @@ static int save_file(const char* fileName, const void* buff, size_t buffSize)
 }
 static ERL_NIF_TERM zstd_nif_compress_to_file(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     ErlNifBinary bin;
-    if(!enif_inspect_binary(env, argv[0], &bin)) return enif_make_badarg(env);
+    if(!enif_inspect_iolist_as_binary(env, argv[0], &bin)) return enif_make_badarg(env);
     if (bin.size > MAX_BYTES_TO_NIF) {
         return enif_schedule_nif(env, "do_compress_to_file", ERL_NIF_DIRTY_JOB_CPU_BOUND, do_compress_to_file, argc, argv);
     }
@@ -110,7 +110,7 @@ static ERL_NIF_TERM do_compress_to_file(ErlNifEnv* env, int argc, const ERL_NIF_
   enif_get_list_length(env, argv[1], &path_len);
   char path[path_len + 1];
 
-  if(!enif_inspect_binary(env, argv[0], &bin)
+  if(!enif_inspect_iolist_as_binary(env, argv[0], &bin)
      || !enif_get_string(env, argv[1], path, (path_len + 1), ERL_NIF_LATIN1)
      || !enif_get_uint(env, argv[2], &compression_level)
      || compression_level > ZSTD_maxCLevel())
