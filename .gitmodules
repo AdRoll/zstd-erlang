@@ -1,3 +1,0 @@
-[submodule "priv/zstd"]
-	path = priv/zstd
-	url = git@github.com:facebook/zstd.git
