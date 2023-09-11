@@ -1,10 +1,17 @@
 #include "erl_nif.h"
-
 #include <stdlib.h>
+#include <string.h>
+#include <errno.h>
 #include <zstd.h>
+
+#define MAX_BYTES_TO_NIF 20000
 
 ErlNifTSDKey zstdDecompressContextKey;
 ErlNifTSDKey zstdCompressContextKey;
+ErlNifTSDKey zstdCompressToFileContextKey;
+
+static ERL_NIF_TERM do_compress_to_file(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+
 
 static ERL_NIF_TERM zstd_nif_compress(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   ErlNifBinary bin, ret_bin;
@@ -62,15 +69,89 @@ static ERL_NIF_TERM zstd_nif_decompress(ErlNifEnv* env, int argc, const ERL_NIF_
   return out;
 }
 
+
+
+static int save_file(const char* fileName, const void* buff, size_t buffSize)
+{
+    FILE* const oFile = fopen(fileName, "a");
+    if (!oFile) {
+      return 0;
+    }
+    size_t const wSize = fwrite(buff, 1, buffSize, oFile);
+    if (wSize != (size_t)buffSize) {
+        return 0;
+    }
+    if (fclose(oFile)) {
+        return 0;
+    }
+    return 1;
+}
+static ERL_NIF_TERM zstd_nif_compress_to_file(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+    ErlNifBinary bin;
+    if(!enif_inspect_iolist_as_binary(env, argv[0], &bin)) return enif_make_badarg(env);
+    if (bin.size > MAX_BYTES_TO_NIF) {
+        return enif_schedule_nif(env, "do_compress_to_file", ERL_NIF_DIRTY_JOB_CPU_BOUND, do_compress_to_file, argc, argv);
+    }
+
+    return do_compress_to_file(env, argc, argv);
+}
+
+static ERL_NIF_TERM do_compress_to_file(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  ErlNifBinary bin, ret_bin;
+  size_t buff_size, compressed_size;
+  unsigned int compression_level, path_len;
+
+  ZSTD_CCtx* ctx = (ZSTD_CCtx*)enif_tsd_get(zstdCompressToFileContextKey);
+  if (!ctx) {
+      ctx = ZSTD_createCCtx();
+      enif_tsd_set(zstdCompressToFileContextKey, ctx);
+  }
+
+  enif_get_list_length(env, argv[1], &path_len);
+  char path[path_len + 1];
+
+  if(!enif_inspect_iolist_as_binary(env, argv[0], &bin)
+     || !enif_get_string(env, argv[1], path, (path_len + 1), ERL_NIF_LATIN1)
+     || !enif_get_uint(env, argv[2], &compression_level)
+     || compression_level > ZSTD_maxCLevel())
+    return enif_make_badarg(env);
+
+  buff_size = ZSTD_compressBound(bin.size);
+
+  if(!enif_alloc_binary(buff_size, &ret_bin))
+    return enif_make_atom(env, "error");
+
+  compressed_size = ZSTD_compressCCtx(ctx, ret_bin.data, buff_size, bin.data, bin.size, compression_level);
+  if(ZSTD_isError(compressed_size)) {
+    enif_release_binary(&ret_bin);
+    return enif_make_atom(env, "error");
+  }
+
+  if(!enif_realloc_binary(&ret_bin, compressed_size)) {
+    enif_release_binary(&ret_bin);
+    return enif_make_atom(env, "error");
+  }
+
+  if (!save_file(path, ret_bin.data, compressed_size)) {
+    enif_release_binary(&ret_bin);
+    return enif_make_atom(env, "error");
+  }
+  
+  enif_release_binary(&ret_bin);
+  return enif_make_atom(env, "ok");
+}
+
 static ErlNifFunc nif_funcs[] = {
     {"compress", 2, zstd_nif_compress},
-    {"decompress", 1, zstd_nif_decompress}
+    {"decompress", 1, zstd_nif_decompress},
+    {"compress_to_file", 3, zstd_nif_compress_to_file},
 };
 
 static int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
  {
  enif_tsd_key_create("zstd_decompress_context_key", &zstdDecompressContextKey);
  enif_tsd_key_create("zstd_compress_context_key", &zstdCompressContextKey);
+ enif_tsd_key_create("zstd_compress_to_file_context_key", &zstdCompressToFileContextKey);
  return 0;
  }
 
