@@ -26,6 +26,47 @@ zstd:decompress(Binary).
 <<"Hello, World!">>
 ```
 
+```
+compress_file() ->
+    {ok, File} = file:open("test.txt.zst", [write, raw, delayed_write, sync]),
+    Bin = << <<"A">> || _ <- lists:seq(1, 1024 * 1024) >>,
+    CStream = zstd:new_compression_stream(),
+    ok = zstd:compression_stream_init(CStream),
+    {ok, ResC} = zstd:stream_compress(CStream, Bin),
+    file:write(File, ResC),
+    {ok, ResF} = zstd:stream_flush(CStream),
+    file:write(File, ResF),
+    file:close(File).
+
+decompress_file() ->
+    {ok, Data} = file:read_file("test.txt.zst"),
+    DStream = zstd:new_decompression_stream(),
+    ok = zstd:decompression_stream_init(DStream),
+    {ok, Bin} = zstd:stream_decompress(DStream, Data),
+    io:format("~s", [Bin]),
+    io:format("Size: ~p~n", [size(Bin)]).
+
+decompress_large_file() ->
+    DStream = zstd:new_decompression_stream(),
+    ok = zstd:decompression_stream_init(DStream),
+
+    {ok, RFile} = file:open("somefile.log.ztd", [read, raw, binary, read_ahead]),
+    {ok, WFile} = file:open("somefile.log", [write, raw, delayed_write, sync]),
+    read_file(RFile, WFile, DStream),
+    file:close(RFile),
+    file:close(WFile).
+
+read_file(RFile, WFile, DStream) ->
+    case file:read(RFile, 1024 * 8) of
+        {ok, Data} ->
+            {ok, Bin} = zstd:stream_decompress(DStream, Data),
+            file:write(WFile, Bin),
+            read_file(RFile, WFile, DStream);
+        eof ->
+            ok
+    end.
+```
+
 #### For Elixir
 
 ```
