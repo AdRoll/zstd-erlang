@@ -405,8 +405,10 @@ static int zstd_on_upgrade(ErlNifEnv *env, void **priv, void **old, ERL_NIF_TERM
 }
 
 static ErlNifFunc nif_funcs[] = {
-  { "compress"                    , 2, zstd_nif_compress                   , ERL_DIRTY_JOB_CPU_BOUND },
-  { "decompress"                  , 1, zstd_nif_decompress                 , ERL_DIRTY_JOB_CPU_BOUND },
+  { "dirty_compress"              , 2, zstd_nif_compress                   , ERL_DIRTY_JOB_CPU_BOUND },
+  { "dirty_decompress"            , 1, zstd_nif_decompress                 , ERL_DIRTY_JOB_CPU_BOUND },
+  { "quick_compress"              , 2, zstd_nif_compress                                             },
+  { "quick_decompress"            , 1, zstd_nif_decompress                                           },
 
   { "new_compression_stream"      , 0, zstd_nif_new_compression_stream                               },
   { "new_decompression_stream"    , 0, zstd_nif_new_decompression_stream                             },

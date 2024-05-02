@@ -2,6 +2,8 @@
 
 -export([compress/1, compress/2]).
 -export([decompress/1]).
+-export([quick_compress/2, quick_decompress/1]).
+-export([dirty_compress/2, dirty_decompress/1]).
 -export([new_compression_stream/0, new_decompression_stream/0, compression_stream_init/1,
          compression_stream_init/2, decompression_stream_init/1, compression_stream_reset/2,
          compression_stream_reset/1, decompression_stream_reset/1, stream_flush/1,
@@ -11,6 +13,9 @@
 
 -define(APPNAME, zstd).
 -define(LIBNAME, zstd_nif).
+% Thresholds at which it is preferable to use a dirty_nif
+-define(UNCOMPRESSED_SIZE_DIRTY, 250000).
+-define(COMPRESSED_SIZE_DIRTY, 50000).
 
 -spec compress(Uncompressed :: binary()) -> Compressed :: binary().
 compress(Binary) ->
@@ -18,11 +23,33 @@ compress(Binary) ->
 
 -spec compress(Uncompressed :: binary(), CompressionLevel :: 0..22) ->
                   Compressed :: binary().
-compress(_, _) ->
+compress(Uncompressed, Level) when byte_size(Uncompressed) > ?UNCOMPRESSED_SIZE_DIRTY ->
+    dirty_compress(Uncompressed, Level);
+compress(Uncompressed, Level) ->
+    quick_compress(Uncompressed, Level).
+
+-spec dirty_compress(Uncompressed :: binary(), CompressionLevel :: 0..22) ->
+                        Compressed :: binary().
+dirty_compress(_, _) ->
+    erlang:nif_error(?LINE).
+
+-spec quick_compress(Uncompressed :: binary(), CompressionLevel :: 0..22) ->
+                        Compressed :: binary().
+quick_compress(_, _) ->
     erlang:nif_error(?LINE).
 
 -spec decompress(Compressed :: binary()) -> Uncompressed :: binary() | error.
-decompress(_) ->
+decompress(Compressed) when byte_size(Compressed) > ?COMPRESSED_SIZE_DIRTY ->
+    dirty_decompress(Compressed);
+decompress(Compressed) ->
+    quick_decompress(Compressed).
+
+-spec dirty_decompress(Compressed :: binary()) -> Uncompressed :: binary() | error.
+dirty_decompress(_) ->
+    erlang:nif_error(?LINE).
+
+-spec quick_decompress(Compressed :: binary()) -> Uncompressed :: binary() | error.
+quick_decompress(_) ->
     erlang:nif_error(?LINE).
 
 -spec new_compression_stream() -> reference().
