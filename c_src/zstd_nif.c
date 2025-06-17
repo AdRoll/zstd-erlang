@@ -111,6 +111,7 @@ static ERL_NIF_TERM zstd_nif_new_decompression_stream(ErlNifEnv* env, int argc, 
 
 static ERL_NIF_TERM zstd_nif_init_compression_stream(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   int level = ZSTD_CLEVEL_DEFAULT;
+  int window_log = 0;
   size_t ret;
   ZSTD_CStream **pzcs;
 
@@ -119,11 +120,17 @@ static ERL_NIF_TERM zstd_nif_init_compression_stream(ErlNifEnv* env, int argc, c
     return enif_make_tuple2(env, zstd_atom_error, zstd_atom_invalid);
 
   /* extract the compression level if any */
-  if ((argc == 2) && !(enif_get_int(env, argv[1], &level)))
+  if ((argc >= 2) && !(enif_get_int(env, argv[1], &level)))
+      return enif_make_badarg(env);
+
+  /* extract the window log if any */
+  if ((argc == 3) && !(enif_get_int(env, argv[2], &window_log)))
       return enif_make_badarg(env);
 
   /* initialize the stream */
   if (ZSTD_isError(ret = ZSTD_initCStream(*pzcs, level)))
+      return enif_make_tuple2(env, zstd_atom_error, enif_make_string(env, ZSTD_getErrorName(ret), ERL_NIF_LATIN1));
+  if (ZSTD_isError(ret = ZSTD_CCtx_setParameter(*pzcs, ZSTD_c_windowLog, window_log)))
       return enif_make_tuple2(env, zstd_atom_error, enif_make_string(env, ZSTD_getErrorName(ret), ERL_NIF_LATIN1));
 
   /* stream initialization successful */
@@ -413,6 +420,7 @@ static ErlNifFunc nif_funcs[] = {
 
   { "compression_stream_init"     , 1, zstd_nif_init_compression_stream    , ERL_DIRTY_JOB_CPU_BOUND },
   { "compression_stream_init"     , 2, zstd_nif_init_compression_stream    , ERL_DIRTY_JOB_CPU_BOUND },
+  { "compression_stream_init"     , 3, zstd_nif_init_compression_stream    , ERL_DIRTY_JOB_CPU_BOUND },
   { "decompression_stream_init"   , 1, zstd_nif_init_decompression_stream  , ERL_DIRTY_JOB_CPU_BOUND },
 
   { "compression_stream_reset"    , 2, zstd_nif_reset_compression_stream                             },

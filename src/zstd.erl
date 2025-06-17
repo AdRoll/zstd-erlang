@@ -2,10 +2,10 @@
 
 -export([compress/1, compress/2]).
 -export([decompress/1]).
--export([new_compression_stream/0, new_decompression_stream/0, compression_stream_init/1,
-         compression_stream_init/2, decompression_stream_init/1, compression_stream_reset/2,
-         compression_stream_reset/1, decompression_stream_reset/1, stream_flush/1,
-         stream_compress/2, stream_decompress/2]).
+-export([new_compression_stream/0, compression_stream_init/1, compression_stream_init/2,
+         compression_stream_init/3, compression_stream_reset/1, compression_stream_reset/2,
+         stream_compress/2, stream_flush/1, new_decompression_stream/0,
+         decompression_stream_init/1, decompression_stream_reset/1, stream_decompress/2]).
 
 -on_load init/0.
 
@@ -39,6 +39,11 @@ compression_stream_init(_Ref) ->
 
 -spec compression_stream_init(reference(), 0..22) -> ok | {error, invalid | string()}.
 compression_stream_init(_Ref, _Level) ->
+    erlang:nif_error(?LINE).
+
+-spec compression_stream_init(reference(), 0..22, integer()) ->
+                                 ok | {error, invalid | string()}.
+compression_stream_init(_Ref, _Level, _WindowLog) ->
     erlang:nif_error(?LINE).
 
 -spec decompression_stream_init(reference()) -> ok | {error, invalid | string()}.
