@@ -1,5 +1,9 @@
 -module(zstd_tests).
 
+-define(COMPRESSION_LEVEL, 5).
+-define(WINDOW_LOG, 23).
+-define(ENABLE_LONG_DISTANCE_MATCHING, 1).
+
 -include_lib("eunit/include/eunit.hrl").
 
 zstd_test() ->
@@ -11,7 +15,11 @@ zstd_test() ->
 zstd_stream_test() ->
     Bin = << <<"A">> || _ <- lists:seq(1, 1024 * 1024) >>,
     CStream = zstd:new_compression_stream(),
-    ok = zstd:compression_stream_init(CStream, 5, 23),
+    ok =
+        zstd:compression_stream_init(CStream,
+                                     ?COMPRESSION_LEVEL,
+                                     ?WINDOW_LOG,
+                                     ?ENABLE_LONG_DISTANCE_MATCHING),
     {ok, CompressionBin} = zstd:stream_compress(CStream, Bin),
     {ok, FlushBin} = zstd:stream_flush(CStream),
 
