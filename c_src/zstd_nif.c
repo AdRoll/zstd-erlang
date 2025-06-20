@@ -250,7 +250,12 @@ static ERL_NIF_TERM zstd_nif_compress_stream(ErlNifEnv* env, int argc, const ERL
         return enif_make_tuple2(env, zstd_atom_error, zstd_atom_invalid);
 
     /* all output binary buffer */
-    if (!(enif_alloc_binary(ZSTD_compressBound(in.size), &out))) {
+    size_t buffer_size = ZSTD_compressBound(in.size);
+    if(ZSTD_isError(buffer_size)) {
+      enif_release_binary(&in);
+      return enif_make_tuple2(env, zstd_atom_error, enif_make_string(env, ZSTD_getErrorName(buffer_size), ERL_NIF_LATIN1));
+    }
+    if (!(enif_alloc_binary(buffer_size, &out))) {
         enif_release_binary(&in);
         return enif_make_tuple2(env, zstd_atom_error, zstd_atom_enomem);
     }
