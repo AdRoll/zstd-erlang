@@ -241,7 +241,6 @@ static ERL_NIF_TERM zstd_nif_flush_compression_stream(ErlNifEnv* env, int argc, 
             enif_release_binary(&bin);
             return enif_make_tuple2(env, zstd_atom_error, zstd_atom_enomem);
           }
-          
       }
   } while (!finished);
 
