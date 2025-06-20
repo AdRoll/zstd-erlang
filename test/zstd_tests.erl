@@ -13,7 +13,7 @@ zstd_test() ->
                      zstd:compress(Data))).
 
 zstd_stream_test() ->
-    Bin = << <<"A">> || _ <- lists:seq(1, 1024 * 1024) >>,
+    Bin = rand:bytes(1000000),
     CStream = zstd:new_compression_stream(),
     ok =
         zstd:compression_stream_init(CStream,
