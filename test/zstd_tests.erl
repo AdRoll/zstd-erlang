@@ -3,7 +3,7 @@
 -define(COMPRESSION_LEVEL, 5).
 -define(WINDOW_LOG, 23).
 -define(ENABLE_LONG_DISTANCE_MATCHING, 1).
--define(NUM_WORKERS, 0).
+-define(NUM_WORKERS, 8).
 
 -include_lib("eunit/include/eunit.hrl").
 
