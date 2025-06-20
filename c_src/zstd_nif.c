@@ -222,23 +222,23 @@ static ERL_NIF_TERM zstd_nif_flush_compression_stream(ErlNifEnv* env, int argc, 
   size_t offset = 0;
   ZSTD_outBuffer outbuf;
   do {
-    /* output buffer */
-    outbuf.pos = 0;
-    outbuf.dst = bin.data + offset;
-    outbuf.size = bin.size - offset;
+      /* output buffer */
+      outbuf.pos = 0;
+      outbuf.dst = bin.data + offset;
+      outbuf.size = bin.size - offset;
 
-    /* ends the stream */
-    size_t const remaining = ZSTD_endStream(*pzcs, &outbuf);
-    if (ZSTD_isError(remaining))
-    {
-        enif_release_binary(&bin);
-        return enif_make_tuple2(env, zstd_atom_error, enif_make_string(env, ZSTD_getErrorName(remaining), ERL_NIF_LATIN1));
-    }
-    finished = remaining == 0;
-    if(!finished) {
-      offset += ZSTD_CStreamOutSize();
-      enif_realloc_binary(&bin, bin.size + ZSTD_CStreamOutSize());
-    }
+      /* ends the stream */
+      size_t const remaining = ZSTD_endStream(*pzcs, &outbuf);
+      if (ZSTD_isError(remaining))
+      {
+          enif_release_binary(&bin);
+          return enif_make_tuple2(env, zstd_atom_error, enif_make_string(env, ZSTD_getErrorName(remaining), ERL_NIF_LATIN1));
+      }
+      finished = remaining == 0;
+      if(!finished) {
+          offset += ZSTD_CStreamOutSize();
+          enif_realloc_binary(&bin, bin.size + ZSTD_CStreamOutSize());
+      }
   } while (!finished);
 
   /* transfer to binary object */
