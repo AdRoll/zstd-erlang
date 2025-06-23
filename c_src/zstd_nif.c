@@ -118,7 +118,7 @@ static ERL_NIF_TERM zstd_nif_init_compression_stream(ErlNifEnv* env, int argc, c
   ZSTD_CStream **pzcs;
 
   /* extract the stream */
-  if (!(enif_get_resource(env, argv[0], zstd_compression_stream_type, (void **)&pzcs)))
+  if (!(enif_get_resource(env, argv[0], zstd_compression_stream_type, (void **)&pzcs)) && *pzcs != NULL)
     return enif_make_tuple2(env, zstd_atom_error, zstd_atom_invalid);
 
   /* extract the compression level if any */
@@ -211,7 +211,7 @@ static ERL_NIF_TERM zstd_nif_flush_compression_stream(ErlNifEnv* env, int argc, 
   ZSTD_CStream **pzcs;
 
   /* extract the stream */
-  if (!(enif_get_resource(env, argv[0], zstd_compression_stream_type, (void **)&pzcs)))
+  if (!(enif_get_resource(env, argv[0], zstd_compression_stream_type, (void **)&pzcs)) && *pzcs != NULL)
       return enif_make_tuple2(env, zstd_atom_error, zstd_atom_invalid);
 
   /* allocate binary buffer */
@@ -263,7 +263,7 @@ static ERL_NIF_TERM zstd_nif_compress_stream(ErlNifEnv* env, int argc, const ERL
     ZSTD_CStream **pzcs;
 
     /* extract the stream */
-    if (!(enif_get_resource(env, argv[0], zstd_compression_stream_type, (void **)&pzcs)) ||
+    if ((!(enif_get_resource(env, argv[0], zstd_compression_stream_type, (void **)&pzcs)) && (*pzcs) != NULL) ||
         !(enif_inspect_iolist_as_binary(env, argv[1], &in)))
         return enif_make_tuple2(env, zstd_atom_error, zstd_atom_invalid);
 
@@ -386,11 +386,13 @@ static ERL_NIF_TERM zstd_nif_decompress_stream(ErlNifEnv* env, int argc, const E
 static void zstd_compression_stream_destructor(ErlNifEnv *env, void *stream) {
     ZSTD_CStream **handle = stream;
     ZSTD_freeCStream(*handle);
+    *handle = NULL;
 }
 
 static void zstd_decompression_stream_destructor(ErlNifEnv *env, void *stream) {
     ZSTD_DStream **handle = stream;
     ZSTD_freeDStream(*handle);
+    *handle = NULL;
 }
 
 static int zstd_init(ErlNifEnv *env) {
