@@ -113,11 +113,12 @@ static ERL_NIF_TERM zstd_nif_init_compression_stream(ErlNifEnv* env, int argc, c
   int level = ZSTD_CLEVEL_DEFAULT;
   int window_log = 0;
   int enable_long_distance_matching = 0;
+  int num_workers = 0;
   size_t ret;
   ZSTD_CStream **pzcs;
 
   /* extract the stream */
-  if (!(enif_get_resource(env, argv[0], zstd_compression_stream_type, (void **)&pzcs)))
+  if (!(enif_get_resource(env, argv[0], zstd_compression_stream_type, (void **)&pzcs)) && *pzcs != NULL)
     return enif_make_tuple2(env, zstd_atom_error, zstd_atom_invalid);
 
   /* extract the compression level if any */
@@ -129,7 +130,11 @@ static ERL_NIF_TERM zstd_nif_init_compression_stream(ErlNifEnv* env, int argc, c
       return enif_make_badarg(env);
 
   /* extract the enable long distance matching if any */
-  if ((argc == 4) && !(enif_get_int(env, argv[3], &enable_long_distance_matching)))
+  if ((argc >= 4) && !(enif_get_int(env, argv[3], &enable_long_distance_matching)))
+      return enif_make_badarg(env);
+
+  /* extract the number of workers */
+  if ((argc == 5) && !(enif_get_int(env, argv[4], &num_workers)))
       return enif_make_badarg(env);
 
   /* initialize the stream */
@@ -140,6 +145,8 @@ static ERL_NIF_TERM zstd_nif_init_compression_stream(ErlNifEnv* env, int argc, c
   if (ZSTD_isError(ret = ZSTD_CCtx_setParameter(*pzcs, ZSTD_c_enableLongDistanceMatching, enable_long_distance_matching)))
       return enif_make_tuple2(env, zstd_atom_error, enif_make_string(env, ZSTD_getErrorName(ret), ERL_NIF_LATIN1));
   if (ZSTD_isError(ret = ZSTD_CCtx_setParameter(*pzcs, ZSTD_c_checksumFlag, 1)))
+      return enif_make_tuple2(env, zstd_atom_error, enif_make_string(env, ZSTD_getErrorName(ret), ERL_NIF_LATIN1));
+  if (ZSTD_isError(ret = ZSTD_CCtx_setParameter(*pzcs, ZSTD_c_nbWorkers, num_workers)))
       return enif_make_tuple2(env, zstd_atom_error, enif_make_string(env, ZSTD_getErrorName(ret), ERL_NIF_LATIN1));
 
   /* stream initialization successful */
@@ -200,31 +207,42 @@ static ERL_NIF_TERM zstd_nif_reset_decompression_stream(ErlNifEnv* env, int argc
 }
 
 static ERL_NIF_TERM zstd_nif_flush_compression_stream(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  size_t ret;
   ErlNifBinary bin;
   ZSTD_CStream **pzcs;
 
   /* extract the stream */
-  if (!(enif_get_resource(env, argv[0], zstd_compression_stream_type, (void **)&pzcs)))
+  if (!(enif_get_resource(env, argv[0], zstd_compression_stream_type, (void **)&pzcs)) && *pzcs != NULL)
       return enif_make_tuple2(env, zstd_atom_error, zstd_atom_invalid);
 
   /* allocate binary buffer */
   if (!(enif_alloc_binary(ZSTD_CStreamOutSize(), &bin)))
       return enif_make_tuple2(env, zstd_atom_error, zstd_atom_enomem);
 
-  /* output buffer */
-  ZSTD_outBuffer outbuf = {
-      .pos = 0,
-      .dst = bin.data,
-      .size = bin.size,
-  };
+  int finished;
+  size_t offset = 0;
+  ZSTD_outBuffer outbuf;
+  do {
+      /* output buffer */
+      outbuf.pos = 0;
+      outbuf.dst = bin.data + offset;
+      outbuf.size = bin.size - offset;
 
-  /* reset the stream */
-  if (ZSTD_isError(ret = ZSTD_endStream(*pzcs, &outbuf)))
-  {
-      enif_release_binary(&bin);
-      return enif_make_tuple2(env, zstd_atom_error, enif_make_string(env, ZSTD_getErrorName(ret), ERL_NIF_LATIN1));
-  }
+      /* ends the stream */
+      size_t const remaining = ZSTD_endStream(*pzcs, &outbuf);
+      if (ZSTD_isError(remaining))
+      {
+          enif_release_binary(&bin);
+          return enif_make_tuple2(env, zstd_atom_error, enif_make_string(env, ZSTD_getErrorName(remaining), ERL_NIF_LATIN1));
+      }
+      finished = remaining == 0;
+      if(!finished) {
+          offset += ZSTD_CStreamOutSize();
+          if(!enif_realloc_binary(&bin, bin.size + ZSTD_CStreamOutSize())) {
+            enif_release_binary(&bin);
+            return enif_make_tuple2(env, zstd_atom_error, zstd_atom_enomem);
+          }
+      }
+  } while (!finished);
 
   /* transfer to binary object */
   ERL_NIF_TERM binary = enif_make_binary(env, &bin);
@@ -232,7 +250,7 @@ static ERL_NIF_TERM zstd_nif_flush_compression_stream(ErlNifEnv* env, int argc, 
 
   /* remove unused spaces */
   if (outbuf.pos < outbuf.size)
-      result = enif_make_sub_binary(env, binary, 0, outbuf.pos);
+      result = enif_make_sub_binary(env, binary, 0, bin.size - (outbuf.size - outbuf.pos));
 
   /* construct the result tuple */
   return enif_make_tuple2(env, zstd_atom_ok, result);
@@ -245,12 +263,17 @@ static ERL_NIF_TERM zstd_nif_compress_stream(ErlNifEnv* env, int argc, const ERL
     ZSTD_CStream **pzcs;
 
     /* extract the stream */
-    if (!(enif_get_resource(env, argv[0], zstd_compression_stream_type, (void **)&pzcs)) ||
+    if ((!(enif_get_resource(env, argv[0], zstd_compression_stream_type, (void **)&pzcs)) && (*pzcs) != NULL) ||
         !(enif_inspect_iolist_as_binary(env, argv[1], &in)))
         return enif_make_tuple2(env, zstd_atom_error, zstd_atom_invalid);
 
     /* all output binary buffer */
-    if (!(enif_alloc_binary(ZSTD_compressBound(in.size), &out))) {
+    size_t buffer_size = ZSTD_compressBound(in.size);
+    if(ZSTD_isError(buffer_size)) {
+        enif_release_binary(&in);
+        return enif_make_tuple2(env, zstd_atom_error, enif_make_string(env, ZSTD_getErrorName(buffer_size), ERL_NIF_LATIN1));
+    }
+    if (!(enif_alloc_binary(buffer_size, &out))) {
         enif_release_binary(&in);
         return enif_make_tuple2(env, zstd_atom_error, zstd_atom_enomem);
     }
@@ -363,11 +386,13 @@ static ERL_NIF_TERM zstd_nif_decompress_stream(ErlNifEnv* env, int argc, const E
 static void zstd_compression_stream_destructor(ErlNifEnv *env, void *stream) {
     ZSTD_CStream **handle = stream;
     ZSTD_freeCStream(*handle);
+    *handle = NULL;
 }
 
 static void zstd_decompression_stream_destructor(ErlNifEnv *env, void *stream) {
     ZSTD_DStream **handle = stream;
     ZSTD_freeDStream(*handle);
+    *handle = NULL;
 }
 
 static int zstd_init(ErlNifEnv *env) {
@@ -431,6 +456,7 @@ static ErlNifFunc nif_funcs[] = {
   { "compression_stream_init"     , 2, zstd_nif_init_compression_stream    , ERL_DIRTY_JOB_CPU_BOUND },
   { "compression_stream_init"     , 3, zstd_nif_init_compression_stream    , ERL_DIRTY_JOB_CPU_BOUND },
   { "compression_stream_init"     , 4, zstd_nif_init_compression_stream    , ERL_DIRTY_JOB_CPU_BOUND },
+  { "compression_stream_init"     , 5, zstd_nif_init_compression_stream    , ERL_DIRTY_JOB_CPU_BOUND },
   { "decompression_stream_init"   , 1, zstd_nif_init_decompression_stream  , ERL_DIRTY_JOB_CPU_BOUND },
 
   { "compression_stream_reset"    , 2, zstd_nif_reset_compression_stream                             },
