@@ -43,8 +43,17 @@ zstd_parallel_test() ->
                                      ?ENABLE_LONG_DISTANCE_MATCHING,
                                      ?NUM_WORKERS),
     Parent = self(),
-    F = fun() -> zstd:stream_compress(CStream, Bin), Parent ! done end,
+    F = fun() ->
+           zstd:stream_compress(CStream, Bin),
+           Parent ! done
+        end,
     lists:foreach(fun(_) -> spawn(F) end, lists:seq(1, 100)),
-    lists:foreach(fun(_) -> receive done -> ok end end, lists:seq(1, 100)),
+    lists:foreach(fun(_) ->
+                     receive
+                         done ->
+                             ok
+                     end
+                  end,
+                  lists:seq(1, 100)),
     {ok, _} = zstd:stream_flush(CStream),
     ok.
