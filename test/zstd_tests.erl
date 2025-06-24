@@ -32,3 +32,19 @@ zstd_stream_test() ->
     DecompressBin = <<DBin1/binary, DBin2/binary>>,
     ?assertEqual(size(Bin), size(DecompressBin)),
     ?assertEqual(Bin, DecompressBin).
+
+zstd_parallel_test() ->
+    Bin = rand:bytes(1_000_000),
+    CStream = zstd:new_compression_stream(),
+    ok =
+        zstd:compression_stream_init(CStream,
+                                     ?COMPRESSION_LEVEL,
+                                     ?WINDOW_LOG,
+                                     ?ENABLE_LONG_DISTANCE_MATCHING,
+                                     ?NUM_WORKERS),
+    Parent = self(),
+    F = fun() -> zstd:stream_compress(CStream, Bin), Parent ! done end,
+    lists:foreach(fun(_) -> spawn(F) end, lists:seq(1, 100)),
+    lists:foreach(fun(_) -> receive done -> ok end end, lists:seq(1, 100)),
+    {ok, _} = zstd:stream_flush(CStream),
+    ok.
